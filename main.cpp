@@ -1,44 +1,45 @@
-#include "NVDrv.h"
 #include <fstream>
+#include "NVDrv.h"
 
-void WriteFileToDisk(const char* file_name, uintptr_t buffer, DWORD size)
+void WriteFileToDisk(const char* file_name, const uintptr_t buffer, const DWORD size)
 {
 	std::ofstream File(file_name, std::ios::binary);
-	File.write((char*)buffer, size);
+	File.write(reinterpret_cast<char*>(buffer), size);
 	File.close();
 }
 
 int main()
 {
-	NVDrv* NV = new NVDrv();
+	const auto NV = new NVDrv();
 	
 	/*
 	*	 Read control registers 0 - 4
 	* 
 	*/
 
-	DWORD CR0 = NV->ReadCr(NVDrv::NVControlRegisters::CR0);
-	printf("CR0: %p\n", (void*)CR0);
+	const DWORD CR0 = NV->ReadCr(NVDrv::NVControlRegisters::CR0);
+	printf("CR0: %p\n", reinterpret_cast<void*>(CR0));
 
-	DWORD CR2 = NV->ReadCr(NVDrv::NVControlRegisters::CR2);
-	printf("CR2: %p\n", (void*)CR2);
+	const DWORD CR2 = NV->ReadCr(NVDrv::NVControlRegisters::CR2);
+	printf("CR2: %p\n", reinterpret_cast<void*>(CR2));
 
-	DWORD CR3 = NV->ReadCr(NVDrv::NVControlRegisters::CR3);
-	printf("CR3: %p\n", (void*)CR3);
+	const DWORD CR3 = NV->ReadCr(NVDrv::NVControlRegisters::CR3);
+	printf("CR3: %p\n", reinterpret_cast<void*>(CR3));
 
-	DWORD CR4 = NV->ReadCr(NVDrv::NVControlRegisters::CR4);
-	printf("CR4: %p\n", (void*)CR4);
+	const DWORD CR4 = NV->ReadCr(NVDrv::NVControlRegisters::CR4);
+	printf("CR4: %p\n", reinterpret_cast<void*>(CR4));
 
-	uintptr_t ProcessBase = NV->GetProcessBase(L"explorer.exe");
-	printf("ProcessBase: %p\n", (void*)ProcessBase);
+	const uintptr_t ProcessBase = NV->GetProcessBase(L"explorer.exe");
+	printf("ProcessBase: %p\n", reinterpret_cast<void*>(ProcessBase));
 
 	/*
 	*	 Allocate temp memory for the dump
 	*
 	*/
 
-	DWORD DumpSize = 0xFFFF;
-	uintptr_t Allocation = (uintptr_t)VirtualAlloc(0, DumpSize, MEM_COMMIT, PAGE_READWRITE);
+	constexpr DWORD DumpSize = 0xFFFF;
+	const uintptr_t Allocation = reinterpret_cast<uintptr_t>(
+		VirtualAlloc(nullptr, DumpSize, MEM_COMMIT, PAGE_READWRITE));
 
 
 	/*
@@ -47,7 +48,7 @@ int main()
 	*/
 
 	for (int i = 0; i < (DumpSize / 8); i++)
-		NV->ReadPhysicalMemory(i * 8, (uintptr_t*)(Allocation + i * 8), 8);
+		NV->ReadPhysicalMemory(i * 8, reinterpret_cast<uintptr_t*>(Allocation + i * 8), 8);
 
 
 	/*
@@ -58,17 +59,20 @@ int main()
 	WriteFileToDisk("PhysicalMemoryDump.bin", Allocation, DumpSize);
 
 	if (Allocation)
-		VirtualFree((void*)Allocation, 0, MEM_RELEASE);
+		VirtualFree(reinterpret_cast<void*>(Allocation), 0, MEM_RELEASE);
 
-	int Result = MessageBoxA(0, "BSOD via nulling CR3?", "Test", MB_YESNO);
+	const int Result = MessageBoxA(nullptr, "BSOD via nulling CR3?", "Test", MB_YESNO);
 
 	/*
-	*	 Bluescreen via writing 0 to the control register 3
+	*	 Blue screen via writing 0 to the control register 3
 	*
 	*/
 
 	if (Result == IDYES)
-		NV->WriteCr(NVDrv::NVControlRegisters::CR3, 0);
+	{
+		if (!NV->WriteCr(NVDrv::NVControlRegisters::CR3, 0))
+			printf("WriteCr failed\n");
+	}
 
 	/*
 	*	Disable KVA shadowing before continuing with this

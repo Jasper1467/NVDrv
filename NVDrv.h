@@ -10,22 +10,22 @@ public:
     /*
     *	IO call to driver for __readcrX() intrinsic where X = (int cr)
     */
-    DWORD                   ReadCr(int cr);
+    DWORD                   ReadCr(int cr) const;
 
     /*
     *	IO call to driver for __writecrX(value) intrinsic where X = (int cr)
     */
-    BOOL                    WriteCr(int cr, DWORD64 value);
+    BOOL                    WriteCr(int cr, DWORD64 value) const;
 
     /*
     *	Gets the file path of a running process by name
     */
-    std::wstring            GetProcessPath(const std::wstring& process_name);
+    static std::wstring            GetProcessPath(const std::wstring& process_name);
 
     /*
     *	Returns the base address of a running process by name
     */
-    uintptr_t               GetProcessBase(const std::wstring& process_name);
+    uintptr_t               GetProcessBase(const std::wstring& process_name) const;
 
 
     /*
@@ -36,44 +36,44 @@ public:
     /*
     *	Get system directory base by walking PROCESSOR_START_BLOCK
     */
-    uintptr_t               GetSystemCR3();
+    uintptr_t               GetSystemCR3() const;
 
     /*
     *	IO call to driver for MmGetPhysicalAddress
     */
-    uintptr_t               MmGetPhysicalAddress(uintptr_t virtual_address);
+    uintptr_t               MmGetPhysicalAddress(uintptr_t virtual_address) const;
 
 
     /*
     *	Translates linear/virtual addresses to physical addresses with rightful directory base
     */
-    uintptr_t               TranslateLinearToPhysicalAddress(uintptr_t virtual_address);
+    uintptr_t               TranslateLinearToPhysicalAddress(uintptr_t virtual_address) const;
 
 
     /*
     *	IO call to driver for physical memory memcpy read via MmMapIoSpace
     */
-    BOOL                    ReadPhysicalMemory(uintptr_t physical_address, void* OUT res, int size);
+    BOOL                    ReadPhysicalMemory(uintptr_t physical_address, void* OUT res, int size) const;
 
     /*
     *	IO call to driver for physical memory memcpy write via MmMapIoSpace
     */
-    BOOL                    WritePhysicalMemory(uintptr_t physical_address, void* IN  res, int size);
+    BOOL                    WritePhysicalMemory(uintptr_t physical_address, void* IN  res, int size) const;
 
     /*
     *	Read virtual memory via translating virtual addresses to physical addresses
     */
-    BOOL                    ReadVirtualMemory(uintptr_t address, LPVOID output, unsigned long size);
+    BOOL                    ReadVirtualMemory(uintptr_t address, LPVOID output, unsigned long size) const;
 
     /*
     *	Write virtual memory via translating virtual addresses to physical addresses
     */
-    BOOL                    WriteVirtualMemory(uintptr_t address, LPVOID data, unsigned long size);
+    BOOL                    WriteVirtualMemory(uintptr_t address, LPVOID data, unsigned long size) const;
 
     /*
     *	Swap reading context for TranslateLinearToPhysicalAddress
     */
-    BOOL                    SwapReadContext(uintptr_t target_cr3);
+    BOOL                    SwapReadContext(uintptr_t target_cr3) const;
 
     NVDrv()
     {
@@ -94,7 +94,7 @@ public:
         *	Get the payload encryption function sub_2130
         */
 
-        encrypt_payload = (decltype(encrypt_payload))(__int64(nvoclock) + 0x2130);
+        encrypt_payload = reinterpret_cast<decltype(encrypt_payload)>(reinterpret_cast<__int64>(nvoclock) + 0x2130);
 
 
 
@@ -118,7 +118,7 @@ public:
     *	Read template for ReadVirtualMemory()
     */
     template<typename T>
-    T Read(uintptr_t address)
+    T Read(const uintptr_t address)
     {
         T buffer;
 
@@ -132,9 +132,9 @@ public:
     *	Write template for WriteVirtualMemory()
     */
     template<typename T>
-    BOOL Write(uintptr_t address, T val)
+    BOOL Write(const uintptr_t address, T val)
     {
-        if (!WriteVirtualMemory(address, (LPVOID)&val, sizeof(T)))
+        if (!WriteVirtualMemory(address, static_cast<LPVOID>(&val), sizeof(T)))
             return FALSE;
 
         return TRUE;

@@ -5,7 +5,7 @@
 *	IO call to driver for MmGetPhysicalAddress
 * 
 */
-uintptr_t NVDrv::MmGetPhysicalAddress(uintptr_t virtual_address)
+uintptr_t NVDrv::MmGetPhysicalAddress(const uintptr_t virtual_address) const
 {
 	request_phys_addr Request{};
 
@@ -22,7 +22,7 @@ uintptr_t NVDrv::MmGetPhysicalAddress(uintptr_t virtual_address)
 	if (!status)
 	{
 		if (DEBUG)
-			printf("Failed VTOP for virtual address: %p!\n", (void*)virtual_address);
+			printf("Failed VTOP for virtual address: %p!\n", reinterpret_cast<void*>(virtual_address));
 
 		return 0;
 	}
@@ -35,13 +35,13 @@ uintptr_t NVDrv::MmGetPhysicalAddress(uintptr_t virtual_address)
 *	IO call to driver for physical memory memcpy read via MmMapIoSpace
 *
 */
-BOOL NVDrv::ReadPhysicalMemory(uintptr_t physical_address, void* OUT res, int size)
+BOOL NVDrv::ReadPhysicalMemory(const uintptr_t physical_address, void* OUT res, int size) const
 {
 	request_memcpy Request{};
 
 	Request.request_id = NVFunction::phys_read;
 	Request.size = size;
-	Request.dst_addr = (__int64)res;
+	Request.dst_addr = reinterpret_cast<__int64>(res);
 	Request.src_addr = physical_address;
 
 	this->encrypt_payload(&Request, 0x38, Request.packet_key);
@@ -54,14 +54,14 @@ BOOL NVDrv::ReadPhysicalMemory(uintptr_t physical_address, void* OUT res, int si
 *	IO call to driver for physical memory memcpy write via MmMapIoSpace
 *
 */
-BOOL NVDrv::WritePhysicalMemory(uintptr_t physical_address, void* IN  res, int size)
+BOOL NVDrv::WritePhysicalMemory(const uintptr_t physical_address, void* IN  res, const int size) const
 {
 	request_memcpy Request{};
 
 	Request.request_id = NVFunction::phys_write;
 	Request.size = size;
 	Request.dst_addr = physical_address;
-	Request.src_addr = (__int64)res;
+	Request.src_addr = reinterpret_cast<__int64>(res);
 
 	this->encrypt_payload(&Request, 0x38, Request.packet_key);
 
@@ -73,7 +73,7 @@ BOOL NVDrv::WritePhysicalMemory(uintptr_t physical_address, void* IN  res, int s
 *	Swap reading context for TranslateLinearToPhysicalAddress
 *
 */
-BOOL NVDrv::SwapReadContext(uintptr_t target_cr3)
+BOOL NVDrv::SwapReadContext(uintptr_t target_cr3) const
 {
 	if (!target_cr3)
 		return FALSE;
@@ -87,7 +87,7 @@ BOOL NVDrv::SwapReadContext(uintptr_t target_cr3)
 *	Get system directory base by walking PROCESSOR_START_BLOCK 
 *
 */
-uintptr_t NVDrv::GetSystemCR3()
+uintptr_t NVDrv::GetSystemCR3() const
 {
 	for (int i = 0; i < 10; i++)
 	{
@@ -124,20 +124,20 @@ uintptr_t NVDrv::GetSystemCR3()
 *	Translates linear/virtual addresses to physical addresses with rightful directory base 
 *
 */
-uintptr_t NVDrv::TranslateLinearToPhysicalAddress(uintptr_t virtual_address)
+uintptr_t NVDrv::TranslateLinearToPhysicalAddress(const uintptr_t virtual_address) const
 {
-	unsigned short PML4 = (unsigned short)((virtual_address >> 39) & 0x1FF);
+	const unsigned short PML4 = static_cast<unsigned short>((virtual_address >> 39) & 0x1FF);
 	uintptr_t PML4E = 0;
 	this->ReadPhysicalMemory((this->target_cr3 + PML4 * sizeof(uintptr_t)), &PML4E, sizeof(PML4E));
 
-	unsigned short DirectoryPtr = (unsigned short)((virtual_address >> 30) & 0x1FF);
+	const unsigned short DirectoryPtr = static_cast<unsigned short>((virtual_address >> 30) & 0x1FF);
 	uintptr_t PDPTE = 0;
 	this->ReadPhysicalMemory(((PML4E & 0xFFFFFFFFFF000) + DirectoryPtr * sizeof(uintptr_t)), &PDPTE, sizeof(PDPTE));
 
 	if ((PDPTE & (1 << 7)) != 0)
 		return (PDPTE & 0xFFFFFC0000000) + (virtual_address & 0x3FFFFFFF);
 
-	unsigned short Directory = (unsigned short)((virtual_address >> 21) & 0x1FF);
+	const unsigned short Directory = static_cast<unsigned short>((virtual_address >> 21) & 0x1FF);
 
 	uintptr_t PDE = 0;
 	this->ReadPhysicalMemory(((PDPTE & 0xFFFFFFFFFF000) + Directory * sizeof(uintptr_t)), &PDE, sizeof(PDE));
@@ -150,7 +150,7 @@ uintptr_t NVDrv::TranslateLinearToPhysicalAddress(uintptr_t virtual_address)
 		return (PDE & 0xFFFFFFFE00000) + (virtual_address & 0x1FFFFF);
 	}
 
-	unsigned short Table = (unsigned short)((virtual_address >> 12) & 0x1FF);
+	const unsigned short Table = static_cast<unsigned short>((virtual_address >> 12) & 0x1FF);
 	uintptr_t PTE = 0;
 
 	this->ReadPhysicalMemory(((PDE & 0xFFFFFFFFFF000) + Table * sizeof(uintptr_t)), &PTE, sizeof(PTE));
@@ -165,12 +165,12 @@ uintptr_t NVDrv::TranslateLinearToPhysicalAddress(uintptr_t virtual_address)
 *	Read virtual memory via translating virtual addresses to physical addresses
 *
 */
-BOOL NVDrv::ReadVirtualMemory(uintptr_t address, LPVOID output, unsigned long size)
+BOOL NVDrv::ReadVirtualMemory(const uintptr_t address, const LPVOID output, const unsigned long size) const
 {
 	if (!address || !size)
 		return FALSE;
 
-	uintptr_t PhysicalAddress = this->TranslateLinearToPhysicalAddress(address);
+	const uintptr_t PhysicalAddress = this->TranslateLinearToPhysicalAddress(address);
 
 	if (!PhysicalAddress)
 		return FALSE;
@@ -178,7 +178,7 @@ BOOL NVDrv::ReadVirtualMemory(uintptr_t address, LPVOID output, unsigned long si
 	if (!this->ReadPhysicalMemory(PhysicalAddress, output, size))
 	{
 		if (DEBUG)
-			printf("Failed ReadVirtualMemory for address: %p!\n", (void*)address);
+			printf("Failed ReadVirtualMemory for address: %p!\n", reinterpret_cast<void*>(address));
 
 		return FALSE;
 	}
@@ -190,12 +190,12 @@ BOOL NVDrv::ReadVirtualMemory(uintptr_t address, LPVOID output, unsigned long si
 *	Write virtual memory via translating virtual addresses to physical addresses
 *
 */
-BOOL NVDrv::WriteVirtualMemory(uintptr_t address, LPVOID data, unsigned long size)
+BOOL NVDrv::WriteVirtualMemory(const uintptr_t address, const LPVOID data, const unsigned long size) const
 {
 	if (!address || !data)
 		return FALSE;
 
-	uintptr_t PhysicalAddress = this->TranslateLinearToPhysicalAddress(address);
+	const uintptr_t PhysicalAddress = this->TranslateLinearToPhysicalAddress(address);
 
 	if (!PhysicalAddress)
 		return FALSE;
@@ -203,7 +203,7 @@ BOOL NVDrv::WriteVirtualMemory(uintptr_t address, LPVOID data, unsigned long siz
 	if (!this->WritePhysicalMemory(PhysicalAddress, data, size))
 	{
 		if (DEBUG)
-			printf("Failed WriteVirtualMemory for address: %p!\n", (void*)address);
+			printf("Failed WriteVirtualMemory for address: %p!\n", reinterpret_cast<void*>(address));
 
 		return FALSE;
 
@@ -215,7 +215,7 @@ BOOL NVDrv::WriteVirtualMemory(uintptr_t address, LPVOID data, unsigned long siz
 *	IO call to driver for __readcrX() intrinsic where X = (int cr)
 *
 */
-DWORD NVDrv::ReadCr(int cr)
+DWORD NVDrv::ReadCr(const int cr) const
 {
 	request_readcr Request{};
 
@@ -226,7 +226,7 @@ DWORD NVDrv::ReadCr(int cr)
 	this->encrypt_payload(&Request, 0x38, Request.packet_key);
 
 	DWORD BytesReturned{};
-	auto status = DeviceIoControl(this->nvhandle, ioctl_code, &Request, 0x138u, &Request, 0x138, &BytesReturned, 0i64);
+	const auto status = DeviceIoControl(this->nvhandle, ioctl_code, &Request, 0x138u, &Request, 0x138, &BytesReturned, 0i64);
 
 	if (!status)
 		return 0;
@@ -238,7 +238,7 @@ DWORD NVDrv::ReadCr(int cr)
 *	IO call to driver for __writecrX(value) intrinsic where X = (int cr)
 *
 */
-BOOL NVDrv::WriteCr(int cr, DWORD64 value)
+BOOL NVDrv::WriteCr(const int cr, const DWORD64 value) const
 {
 	request_writecr Request{};
 
@@ -259,7 +259,7 @@ BOOL NVDrv::WriteCr(int cr, DWORD64 value)
 */
 std::wstring NVDrv::GetProcessPath(const std::wstring& process_name)
 {
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	const HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
 	if (hSnapshot == INVALID_HANDLE_VALUE) {
 		return L"";
@@ -271,7 +271,7 @@ std::wstring NVDrv::GetProcessPath(const std::wstring& process_name)
 			if (_wcsicmp(processEntry.szExeFile, process_name.c_str()) == 0) {
 				CloseHandle(hSnapshot);
 
-				HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processEntry.th32ProcessID);
+				const HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processEntry.th32ProcessID);
 				if (hProcess != nullptr) {
 					wchar_t buffer[MAX_PATH];
 					DWORD bufferSize = MAX_PATH;
@@ -298,45 +298,45 @@ std::wstring NVDrv::GetProcessPath(const std::wstring& process_name)
 *	Returns the base address of a running process by name
 *
 */
-uintptr_t NVDrv::GetProcessBase(const std::wstring& process_name)
+uintptr_t NVDrv::GetProcessBase(const std::wstring& process_name) const
 {
-	return (uintptr_t)LoadLibrary(this->GetProcessPath(process_name).c_str());
+	return reinterpret_cast<uintptr_t>(LoadLibrary(this->GetProcessPath(process_name).c_str()));
 }
 
 /*
 *	Bruteforcing to get the directory base of a process with it's base address
 *
 */
-uintptr_t NVDrv::GetProcessCR3(uintptr_t base_address)
+uintptr_t NVDrv::GetProcessCR3(const uintptr_t base_address)
 {
 	if (!base_address) {
 		return 0;
 	}
 
-	uintptr_t NtdllAddress = reinterpret_cast<uintptr_t>(GetModuleHandleA("ntdll.dll"));
+	const uintptr_t NtdllAddress = reinterpret_cast<uintptr_t>(GetModuleHandleA("ntdll.dll"));
 	if (!NtdllAddress) {
 		return 0;
 	}
 
-	uintptr_t CurrentCR3 = this->ReadCr(NVControlRegisters::CR3);
+	const uintptr_t CurrentCR3 = this->ReadCr(NVControlRegisters::CR3);
 	if (!CurrentCR3) {
 		return 0;
 	}
 
 	this->SwapReadContext(CurrentCR3);
 
-	uintptr_t NtdllPhysicalAddress = this->TranslateLinearToPhysicalAddress(NtdllAddress);
+	const uintptr_t NtdllPhysicalAddress = this->TranslateLinearToPhysicalAddress(NtdllAddress);
 
 	for (uintptr_t i = 0; i != 0x50000000; i++)
 	{
-		uintptr_t CR3 = i << 12;
+		const uintptr_t CR3 = i << 12;
 
 		if (CR3 == CurrentCR3)
 			continue;
 
 		this->SwapReadContext(CR3);
 
-		uintptr_t PhysicalAddress = this->TranslateLinearToPhysicalAddress(NtdllAddress);
+		const uintptr_t PhysicalAddress = this->TranslateLinearToPhysicalAddress(NtdllAddress);
 
 		if (!PhysicalAddress)
 			continue;
@@ -350,7 +350,7 @@ uintptr_t NVDrv::GetProcessCR3(uintptr_t base_address)
 			if (Bytes == 0x4D)
 			{
 				if (DEBUG)
-					printf("GetProcessCR3: %p\n", (void*)CR3);
+					printf("GetProcessCR3: %p\n", reinterpret_cast<void*>(CR3));
 
 				this->SwapReadContext(CR3);
 
